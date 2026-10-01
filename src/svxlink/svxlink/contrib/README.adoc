@@ -134,10 +134,9 @@ sudo make install
 sudo systemctl start svxlink
 ```
 
-The new configuration file TetraLogic.conf must contain the [TetraLogic]-section
-from svxlink.conf. This file is now located in /etc/svxlink/svxlink.d directory.
-Remove the [TetraLogic]-section from svxlink.conf but let the LOGICS- and LINKS
-definitions with "Tetra" untouched.
+TetraLogic settings and their supporting sections are supplied in
+/etc/svxlink/svxlink.d/TetraLogic.conf. Configure TetraLogic in that file.
+The LOGICS and LINKS definitions remain in svxlink.conf.
 
 To use the QOS (quality of service) funtionality the installation and configuration
 of ssmtp is needed.
