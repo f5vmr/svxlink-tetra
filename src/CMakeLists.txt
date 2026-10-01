@@ -22,7 +22,35 @@
 # Project setup
 ##############################################################################
 cmake_minimum_required(VERSION 3.7...3.30)
-project(svxlink C CXX)
+
+# Read the release version independently of Git-derived build versions.
+file(
+  STRINGS
+  "${CMAKE_CURRENT_LIST_DIR}/versions"
+  SVXLINK_VERSION_LINE
+  REGEX "^PROJECT=[0-9]+[.][0-9]+([.][0-9]+)?$"
+)
+
+if(NOT SVXLINK_VERSION_LINE)
+  message(FATAL_ERROR
+    "Could not find a valid PROJECT= version in "
+    "${CMAKE_CURRENT_LIST_DIR}/versions"
+  )
+endif()
+
+string(
+  REGEX REPLACE "^PROJECT=" ""
+  SVXLINK_RELEASE_VERSION
+  "${SVXLINK_VERSION_LINE}"
+)
+
+project(
+  svxlink
+  VERSION "${SVXLINK_RELEASE_VERSION}"
+  LANGUAGES C CXX
+)
+
+message(STATUS "SvxLink release version: ${svxlink_VERSION}")
 #enable_testing()
 
 # The path to the project global include directory
@@ -342,9 +370,10 @@ endif(USE_QT)
 
 # Experimental CPack package building
 set(CPACK_SET_DESTDIR "ON")
+set(CPACK_PACKAGE_NAME "svxlink")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
   "Advanced voice services system for ham radio use")
-string(REPLACE "-" "." CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VERSION "${svxlink_VERSION}")
 message(STATUS "Package Version = ${CPACK_PACKAGE_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION
   "The SvxLink project develops an advanced voice services system for ham radio use. It can be run on a simplex frequency or act as a repeater controller.")
@@ -354,6 +383,39 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/../COPYRIGHT")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/../README.adoc")
 
 if (CPACK_GENERATOR STREQUAL "DEB")
+  set(CPACK_DEBIAN_PACKAGE_VERSION "${svxlink_VERSION}+tetra")
+  set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+  set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+
+  # For native Debian builds, use the installed userspace architecture.
+  # Allow an explicit architecture override for cross-compilation.
+  if(NOT CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
+    find_program(DPKG_EXECUTABLE dpkg)
+
+    if(NOT DPKG_EXECUTABLE)
+      message(FATAL_ERROR
+        "Debian packaging requires dpkg or an explicit "
+        "CPACK_DEBIAN_PACKAGE_ARCHITECTURE."
+      )
+    endif()
+
+    execute_process(
+      COMMAND "${DPKG_EXECUTABLE}" --print-architecture
+      OUTPUT_VARIABLE CPACK_DEBIAN_PACKAGE_ARCHITECTURE
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE DPKG_ARCH_RESULT
+    )
+
+    if(NOT DPKG_ARCH_RESULT EQUAL 0
+       OR CPACK_DEBIAN_PACKAGE_ARCHITECTURE STREQUAL "")
+      message(FATAL_ERROR "Could not determine Debian package architecture.")
+    endif()
+  endif()
+
+  message(STATUS
+    "Debian package architecture: ${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}"
+  )
   #set(CPACK_DEBIAN_PACKAGE_DEPENDS "libsigc++-2.0-0v5, libgsm1, libpopt0, tcl, libgcrypt20, libspeex1, libasound2, libopus0, alsa-utils, vorbis-tools, libcurl4, rtl-sdr, libjsoncpp1")
   string(REPLACE " " "\n" CONFIG_FILES_NL "${CONFIG_FILES}")
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/conffiles" "${CONFIG_FILES_NL}")
@@ -361,9 +423,24 @@ if (CPACK_GENERATOR STREQUAL "DEB")
     set(chown_file_commands "${chown_file_commands}${CHOWN_TOOL} ${file}\n")
   endforeach()
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/postinst"
-    "getent group ${SVXLINK_GROUP} >/dev/null || groupadd -r ${SVXLINK_GROUP}\n"
-    "getent passwd ${SVXLINK_USER} >/dev/null || useradd -r -g ${SVXLINK_GROUP} ${SVXLINK_USER}\n"
-    "${chown_file_commands}")
+    "#!/bin/sh\n"
+    "set -e\n"
+    "\n"
+    "case \"$1\" in\n"
+    "  configure)\n"
+    "    getent group ${SVXLINK_GROUP} >/dev/null || groupadd -r ${SVXLINK_GROUP}\n"
+    "    getent passwd ${SVXLINK_USER} >/dev/null || useradd -r -g ${SVXLINK_GROUP} ${SVXLINK_USER}\n"
+    "${chown_file_commands}"
+    "    ldconfig\n"
+    "    if [ -d /run/systemd/system ]; then\n"
+    "      systemctl daemon-reload\n"
+    "    fi\n"
+    "    ;;\n"
+    "esac\n"
+    "\n"
+    "exit 0\n"
+  )
+  set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION ON)
   set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_BINARY_DIR}/conffiles;${CMAKE_CURRENT_BINARY_DIR}/postinst")
 endif(CPACK_GENERATOR STREQUAL "DEB")
 
