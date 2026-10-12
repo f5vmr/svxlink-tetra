@@ -22,15 +22,9 @@ foreach(version ${versions})
   endif(ver_name MATCHES ^LIB)
 endforeach(version)
 
-execute_process(
-  COMMAND git describe --tags
-  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-  OUTPUT_VARIABLE PROJECT_VERSION
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET)
-if("${PROJECT_VERSION}" STREQUAL "")
-  set(PROJECT_VERSION "${VER_PROJECT}")
-endif()
+# Use the numeric release version resolved by the parent CMakeLists.txt.
+# Preserve the individual component versions from the versions file.
+set(PROJECT_VERSION "${svxlink_VERSION}")
 set(PROJECT_VERSION "${PROJECT_VERSION}" PARENT_SCOPE)
 
 foreach(version ${versions})
